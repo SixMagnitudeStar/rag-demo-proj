@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 
 <template>
   <main class="home-page">
-    <h1 class="welcome-heading">歡迎來到管理系統</h1>
+    <!-- <h1 class="welcome-heading">歡迎來到管理系統</h1> -->
     <nav class="main-menu">
       <RouterLink to="/employees" class="menu-item">
         <i class="icon employee-icon"></i>

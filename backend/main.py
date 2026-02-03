@@ -7,7 +7,10 @@ import inspect
 
 from . import crud, models, schemas
 from .database import SessionLocal, engine
-from .llm_service import get_llm_response_with_tool_call, get_llm_final_answer # Import new summarization function
+## from .llm_service import get_llm_response_with_tool_call, get_llm_final_answer # Import new summarization function
+from .llm_service import ERPAssistant
+
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -122,6 +125,10 @@ def delete_system_info(system_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="System Info not found")
     return {"ok": True}
 
+
+# 建立助理實例
+assistant = ERPAssistant()
+
 # LLM Q&A Endpoint
 @app.post("/api/qna/")
 async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
@@ -131,13 +138,12 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
     if not user_prompt:
         raise HTTPException(status_code=400, detail="User prompt is required.")
 
-    # Generate system prompt for LLM based on available SystemInfo
+    # 生成系統提示（system prompt）
     system_infos = crud.get_all_system_info(db)
-    available_tools_description = []
-    for info in system_infos:
-        available_tools_description.append(
-            f"- 系統名稱: {info.system_name}, 查詢函數: {info.data_query_function_name}"
-        )
+    available_tools_description = [
+        f"- 系統名稱: {info.system_name}, 查詢函數: {info.data_query_function_name}"
+        for info in system_infos
+    ]
 
     system_prompt_for_tool_call = (
         "你是一個智能助理，可以根據用戶的問題判斷需要查詢哪些系統的資料。 "
@@ -146,26 +152,22 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
         "\n\n請根據用戶的問題，判斷需要查詢哪些系統的資料 (可以是一個或多個)。 "
         "以 JSON 格式回應，包含 'llm_text_response' 和 'tool_calls' (一個列表)。 "
         "如果無法判斷或不需要查詢資料，則 'tool_calls' 可以是空列表或省略。 "
-        "每個 'tool_call' 物件應包含 'system_name' 和 'function_name' (例如: {\"system_name\": \"員工管理\", \"function_name\": \"get_employees\"})。 "
-        "不要包含 'parameters'，因為目前函數不需要參數。\n"
-        "範例回應 (單一工具呼叫):\n"
-        "{\"llm_text_response\": \"好的，我會為您查詢員工資料。\", \"tool_calls\": [{\"system_name\": \"員工管理\", \"function_name\": \"get_employees\"}]}"
-        "\n範例回應 (多個工具呼叫):\n"
-        "{\"llm_text_response\": \"好的，我會為您查詢員工和訂單資料。\", \"tool_calls\": [{\"system_name\": \"員工管理\", \"function_name\": \"get_employees\"}, {\"system_name\": \"訂單管理\", \"function_name\": \"get_orders\"}]}"
-        "\n或者:\n"
-        "{\"llm_text_response\": \"很抱歉，我無法處理您的請求，請提供更具體的資訊。\", \"tool_calls\": []}"
+        "每個 'tool_call' 物件應包含 'system_name' 和 'function_name'。"
     )
 
-    # First LLM call: Determine tool calls
-    llm_tool_call_response = await get_llm_response_with_tool_call(system_prompt_for_tool_call, user_prompt)
-    
-    llm_initial_text_response = llm_tool_call_response.get("llm_text_response", "未能從LLM獲取文字回應。")
+    # --- 第一次 LLM 呼叫: 判斷工具呼叫 ---
+    llm_tool_call_response = await assistant.get_llm_response_with_tool_call(
+        system_prompt_for_tool_call, user_prompt
+    )
+
+    llm_initial_text_response = llm_tool_call_response.get(
+        "llm_text_response", "未能從LLM獲取文字回應。"
+    )
     tool_calls = llm_tool_call_response.get("tool_calls", [])
-    print(f"Debug: LLM Initial Text Response: {llm_initial_text_response}")
-    print(f"Debug: Tool Calls from LLM: {tool_calls}")
 
     combined_tool_results = []
 
+    # 執行 LLM 推薦的工具函數
     if tool_calls and isinstance(tool_calls, list):
         for tool_call in tool_calls:
             function_name = tool_call.get("function_name")
@@ -173,13 +175,12 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
             if function_name and function_name in FUNCTION_MAP:
                 try:
                     tool_func = FUNCTION_MAP[function_name]
-                    
                     if 'db' in inspect.signature(tool_func).parameters:
                         data = tool_func(db=db)
                     else:
                         data = tool_func()
-                    
-                    # Convert SQLAlchemy models to Pydantic schemas for consistent JSON output
+
+                    # 格式化資料為 JSON
                     formatted_data = []
                     if function_name == "get_employees":
                         formatted_data = [schemas.Employee.model_validate(item).model_dump() for item in data]
@@ -189,7 +190,7 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                         formatted_data = [schemas.SystemInfo.model_validate(item).model_dump() for item in data]
                     else:
                         formatted_data = [{"error": f"Unknown schema for function {function_name}", "data": str(data)}]
-                    
+
                     combined_tool_results.append({
                         "system_name": system_name,
                         "function_name": function_name,
@@ -199,7 +200,7 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                     combined_tool_results.append({
                         "system_name": system_name,
                         "function_name": function_name,
-                        "error": f"執行查詢函數 '{function_name}' 失敗: {str(e)}"
+                        "error": f"執行函數 '{function_name}' 失敗: {str(e)}"
                     })
             else:
                 combined_tool_results.append({
@@ -207,15 +208,112 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                     "function_name": function_name,
                     "error": f"LLM推薦的函數 '{function_name}' 不存在或未被映射。"
                 })
-    
-    print(f"Debug: Combined Tool Results before final LLM call: {combined_tool_results}")
-    final_llm_response = llm_initial_text_response # Default to initial response
 
-    # Second LLM call: Summarize retrieved data
-    if combined_tool_results: # Only call summarization LLM if there's data to summarize
-        final_llm_response = await get_llm_final_answer(user_prompt, combined_tool_results)
+    # --- 第二次 LLM 呼叫: 整合資料生成最終回答 ---
+    final_llm_response = llm_initial_text_response
+    if combined_tool_results:
+        final_llm_response = await assistant.get_llm_final_answer(
+            user_prompt, combined_tool_results
+        )
 
     return {
         "llm_text_response": final_llm_response,
         "tool_result": combined_tool_results if combined_tool_results else None
     }
+# async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
+#     user_data = await request.json()
+#     user_prompt = user_data.get("user_prompt")
+
+#     if not user_prompt:
+#         raise HTTPException(status_code=400, detail="User prompt is required.")
+
+#     # Generate system prompt for LLM based on available SystemInfo
+#     system_infos = crud.get_all_system_info(db)
+#     available_tools_description = []
+#     for info in system_infos:
+#         available_tools_description.append(
+#             f"- 系統名稱: {info.system_name}, 查詢函數: {info.data_query_function_name}"
+#         )
+
+#     system_prompt_for_tool_call = (
+#         "你是一個智能助理，可以根據用戶的問題判斷需要查詢哪些系統的資料。 "
+#         "以下是你目前可以查詢的系統資訊列表:\n" +
+#         "\n".join(available_tools_description) +
+#         "\n\n請根據用戶的問題，判斷需要查詢哪些系統的資料 (可以是一個或多個)。 "
+#         "以 JSON 格式回應，包含 'llm_text_response' 和 'tool_calls' (一個列表)。 "
+#         "如果無法判斷或不需要查詢資料，則 'tool_calls' 可以是空列表或省略。 "
+#         "每個 'tool_call' 物件應包含 'system_name' 和 'function_name' (例如: {\"system_name\": \"員工管理\", \"function_name\": \"get_employees\"})。 "
+#         "不要包含 'parameters'，因為目前函數不需要參數。\n"
+#         "範例回應 (單一工具呼叫):\n"
+#         "{\"llm_text_response\": \"好的，我會為您查詢員工資料。\", \"tool_calls\": [{\"system_name\": \"員工管理\", \"function_name\": \"get_employees\"}]}"
+#         "\n範例回應 (多個工具呼叫):\n"
+#         "{\"llm_text_response\": \"好的，我會為您查詢員工和訂單資料。\", \"tool_calls\": [{\"system_name\": \"員工管理\", \"function_name\": \"get_employees\"}, {\"system_name\": \"訂單管理\", \"function_name\": \"get_orders\"}]}"
+#         "\n或者:\n"
+#         "{\"llm_text_response\": \"很抱歉，我無法處理您的請求，請提供更具體的資訊。\", \"tool_calls\": []}"
+#     )
+
+
+
+#     # First LLM call: Determine tool calls
+#     llm_tool_call_response = await get_llm_response_with_tool_call(system_prompt_for_tool_call, user_prompt)
+    
+#     llm_initial_text_response = llm_tool_call_response.get("llm_text_response", "未能從LLM獲取文字回應。")
+#     tool_calls = llm_tool_call_response.get("tool_calls", [])
+#     print(f"Debug: LLM Initial Text Response: {llm_initial_text_response}")
+#     print(f"Debug: Tool Calls from LLM: {tool_calls}")
+
+#     combined_tool_results = []
+
+#     if tool_calls and isinstance(tool_calls, list):
+#         for tool_call in tool_calls:
+#             function_name = tool_call.get("function_name")
+#             system_name = tool_call.get("system_name", "未知系統")
+#             if function_name and function_name in FUNCTION_MAP:
+#                 try:
+#                     tool_func = FUNCTION_MAP[function_name]
+                    
+#                     if 'db' in inspect.signature(tool_func).parameters:
+#                         data = tool_func(db=db)
+#                     else:
+#                         data = tool_func()
+                    
+#                     # Convert SQLAlchemy models to Pydantic schemas for consistent JSON output
+#                     formatted_data = []
+#                     if function_name == "get_employees":
+#                         formatted_data = [schemas.Employee.model_validate(item).model_dump() for item in data]
+#                     elif function_name == "get_orders":
+#                         formatted_data = [schemas.Order.model_validate(item).model_dump() for item in data]
+#                     elif function_name == "get_all_system_info":
+#                         formatted_data = [schemas.SystemInfo.model_validate(item).model_dump() for item in data]
+#                     else:
+#                         formatted_data = [{"error": f"Unknown schema for function {function_name}", "data": str(data)}]
+                    
+#                     combined_tool_results.append({
+#                         "system_name": system_name,
+#                         "function_name": function_name,
+#                         "data": formatted_data
+#                     })
+#                 except Exception as e:
+#                     combined_tool_results.append({
+#                         "system_name": system_name,
+#                         "function_name": function_name,
+#                         "error": f"執行查詢函數 '{function_name}' 失敗: {str(e)}"
+#                     })
+#             else:
+#                 combined_tool_results.append({
+#                     "system_name": system_name,
+#                     "function_name": function_name,
+#                     "error": f"LLM推薦的函數 '{function_name}' 不存在或未被映射。"
+#                 })
+    
+#     print(f"Debug: Combined Tool Results before final LLM call: {combined_tool_results}")
+#     final_llm_response = llm_initial_text_response # Default to initial response
+
+#     # Second LLM call: Summarize retrieved data
+#     if combined_tool_results: # Only call summarization LLM if there's data to summarize
+#         final_llm_response = await get_llm_final_answer(user_prompt, combined_tool_results)
+
+#     return {
+#         "llm_text_response": final_llm_response,
+#         "tool_result": combined_tool_results if combined_tool_results else None
+#     }
