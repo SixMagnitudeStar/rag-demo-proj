@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'; // Import useRouter
 
 const userPrompt = ref('');
 const llmResponse = ref('');
 const toolResult = ref<any>(null);
 const isLoading = ref(false);
+const router = useRouter(); // Initialize router
 
 const sendMessage = async () => {
   if (!userPrompt.value.trim()) {
@@ -31,8 +33,23 @@ const sendMessage = async () => {
     }
 
     const data = await response.json();
-    llmResponse.value = data.llm_text_response;
-    toolResult.value = data.tool_result;
+    
+    // Handle different request types from LLM
+    if (data.request_type === 'OPEN_APPLICATION') {
+      const routeName = data.frontend_route_name;
+      if (routeName) {
+        llmResponse.value = data.llm_text_response || `正在為您開啟 ${routeName} 頁面...`;
+        router.push({ name: routeName });
+      } else {
+        llmResponse.value = data.llm_text_response || '無法識別要開啟的應用程式頁面。';
+      }
+    } else if (data.request_type === 'ASK_SYSTEM_QUESTION') {
+      llmResponse.value = data.llm_text_response;
+      toolResult.value = data.tool_result;
+    } else { // UNKNOWN or other types
+      llmResponse.value = data.llm_text_response || '抱歉，我不明白您的問題，請再試一次。';
+      toolResult.value = null; // Clear any old tool results
+    }
 
     userPrompt.value = ''; // Clear input after sending
   } catch (error: any) {

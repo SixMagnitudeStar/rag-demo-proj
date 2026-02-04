@@ -6,12 +6,16 @@ interface SystemInfo {
   id: number;
   system_name: string;
   data_query_function_name: string;
+  filterable_columns: string | null;
+  frontend_route_name: string | null;
 }
 
 const systemInfoList: Ref<SystemInfo[]> = ref([]);
 const newSystemInfo = reactive({
   system_name: '',
-  data_query_function_name: ''
+  data_query_function_name: '',
+  filterable_columns: '',
+  frontend_route_name: ''
 });
 
 const fetchSystemInfo = async () => {
@@ -32,13 +36,31 @@ const addSystemInfo = async () => {
     return;
   }
 
+  // Prepare payload, setting filterable_columns and frontend_route_name to null if empty
+  const payload = {
+    ...newSystemInfo,
+    filterable_columns: newSystemInfo.filterable_columns || null,
+    frontend_route_name: newSystemInfo.frontend_route_name || null
+  };
+
+  // Optional: Basic JSON validation for filterable_columns
+  if (payload.filterable_columns) {
+    try {
+      JSON.parse(payload.filterable_columns);
+    } catch (e) {
+      alert('可篩選欄位格式不正確，請輸入有效的 JSON 陣列字串，例如：["name", "address"]');
+      return;
+    }
+  }
+
+
   try {
     const response = await fetch('http://localhost:8000/api/system_info/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(newSystemInfo),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -49,6 +71,8 @@ const addSystemInfo = async () => {
     // Clear form and refetch system info
     newSystemInfo.system_name = '';
     newSystemInfo.data_query_function_name = '';
+    newSystemInfo.filterable_columns = '';
+    newSystemInfo.frontend_route_name = '';
     fetchSystemInfo();
   } catch (error: any) {
     alert(`新增系統資訊失敗: ${error.message}`);
@@ -97,6 +121,14 @@ onMounted(fetchSystemInfo);
           <label for="data_query_function_name">資料查詢函數名稱: *</label>
           <input type="text" id="data_query_function_name" v-model="newSystemInfo.data_query_function_name" required />
         </div>
+        <div class="form-group">
+          <label for="filterable_columns">可篩選欄位 (JSON 格式):</label>
+          <input type="text" id="filterable_columns" v-model="newSystemInfo.filterable_columns" placeholder='["name", "address"]' />
+        </div>
+        <div class="form-group">
+          <label for="frontend_route_name">前端路由名稱:</label>
+          <input type="text" id="frontend_route_name" v-model="newSystemInfo.frontend_route_name" placeholder='例如: employees, orders' />
+        </div>
         <button type="submit">新增系統資訊</button>
       </form>
     </div>
@@ -110,6 +142,8 @@ onMounted(fetchSystemInfo);
             <th>ID</th>
             <th>系統名稱</th>
             <th>資料查詢函數名稱</th>
+            <th>可篩選欄位</th>
+            <th>前端路由名稱</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -118,6 +152,8 @@ onMounted(fetchSystemInfo);
             <td>{{ info.id }}</td>
             <td>{{ info.system_name }}</td>
             <td>{{ info.data_query_function_name }}</td>
+            <td>{{ info.filterable_columns || '無' }}</td>
+            <td>{{ info.frontend_route_name || '無' }}</td>
             <td>
               <button @click="deleteSystemInfo(info.system_name)" class="delete-button">刪除</button>
             </td>

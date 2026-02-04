@@ -27,3 +27,5 @@ class SystemInfo(Base):
     id = Column(Integer, primary_key=True, index=True)
     system_name = Column(String, unique=True, index=True, nullable=False)
     data_query_function_name = Column(String, nullable=False)
+    filterable_columns = Column(String, nullable=True) # Stores a JSON list of strings
+    frontend_route_name = Column(String, nullable=True) # New field for frontend routing
