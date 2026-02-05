@@ -9,12 +9,20 @@ load_dotenv()
 
 class ERPAssistant:
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
+        # Try GOOGLE_API_KEY first, then fallback to GEMINI_API_KEY
+        self.api_key = os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
-            raise RuntimeError("錯誤：未設定 Gemini API 金鑰，請檢查 .env 檔案。")
+            self.api_key = os.getenv("GEMINI_API_KEY")
+
+        if not self.api_key:
+            raise RuntimeError("錯誤：未設定 Gemini/Google API 金鑰，請檢查 .env 檔案並確保設定 GOOGLE_API_KEY 或 GEMINI_API_KEY。")
+        
         genai.configure(api_key=self.api_key)
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        print(f"DEBUG: ERPAssistant initialized. Model: {self.model}")
 
     async def get_question_scope(self, user_prompt: str, db: Session) -> dict:
+        print(f"DEBUG: get_question_scope called. Model: {self.model}")
         """
         Processes the user's prompt to determine intent (open application or ask system question)
         and extracts relevant information (frontend route or data query parameters).
@@ -122,10 +130,55 @@ class ERPAssistant:
 - 你的回答只能是 JSON，不要包含任何額外的文字或解釋。
 """
 
+        print("--- LLM INTERACTION WITH GOOGLE GEMINI (TOOL CALL) ---")
+        print(f"System Prompt: {system_prompt}")
+        print(f"User Prompt: {user_prompt}")
+
+        try:
+            messages = [
+                {"role": "user", "parts": [system_prompt + "\n\n用戶問題: " + user_prompt]},
+            ]
+
+            response = await self.model.generate_content_async(messages)
+            llm_response_content = response.text
+            print(f"Raw LLM Response (Tool Call): {llm_response_content}")
+
+            # Pre-process: Strip markdown code block delimiters if present
+            if llm_response_content.strip().startswith("```json"):
+                llm_response_content = llm_response_content.strip()[len("```json"):].strip()
+                if llm_response_content.endswith("```"):
+                    llm_response_content = llm_response_content[:-len("```")].strip()
+            
+            parsed_response = {} # Initialize parsed_response to ensure it's always a dict
+            try:
+                parsed_response = json.loads(llm_response_content)
+                llm_text_response = parsed_response.get("llm_text_response", llm_response_content)
+                tool_calls = parsed_response.get("tool_calls", [])
+                if not isinstance(tool_calls, list):
+                    tool_calls = []
+                    print("Warning: 'tool_calls' from LLM was not a list. Ignoring tool calls.")
+            except json.JSONDecodeError:
+                llm_text_response = llm_response_content
+                tool_calls = []
+                print("Warning: LLM response was not a valid JSON string. Treating as plain text and no tool calls.")
+                # When JSON decoding fails, parsed_response remains an empty dict, so defaults will be used.
+
+            return {
+                "request_type": parsed_response.get("request_type", "UNKNOWN"),
+                "llm_text_response": llm_text_response,
+                "tool_calls": tool_calls,
+                "frontend_route_name": parsed_response.get("frontend_route_name"),
+            }
+
+        except Exception as e:
+            print(f"Error calling Gemini LLM (Tool Call): {e}")
+            return {"llm_text_response": f"我目前無法連接到 Gemini 服務或處理請求: {e}", "tool_calls": [], "request_type": "UNKNOWN"}
+
     async def get_llm_final_answer(self, original_prompt: str, retrieved_data_json: dict) -> str:
         print("--- LLM INTERACTION WITH GOOGLE GEMINI (FINAL ANSWER) ---")
 
         try:
+            
             summarization_prompt = (
                 f"你是一個智能助理，請根據以下用戶問題和所提供的數據，用繁體中文生成一個清晰、簡潔的回答。\n"
                 f"用戶問題: {original_prompt}\n"

@@ -1,29 +1,32 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import QnAChatWidget from '../components/QnAChatWidget.vue'; // Import the QnA component
+// Removed isQnAChatOpen, toggleQnAChat, fabRef, onMounted as FAB is removed
 </script>
 
 <template>
   <main class="home-page">
-    <!-- <h1 class="welcome-heading">歡迎來到管理系統</h1> -->
-    <nav class="main-menu">
-      <RouterLink to="/employees" class="menu-item">
-        <i class="icon employee-icon"></i>
-        <span>員工管理</span>
-      </RouterLink>
-      <RouterLink to="/orders" class="menu-item">
-        <i class="icon order-icon"></i>
-        <span>訂單管理</span>
-      </RouterLink>
-      <RouterLink to="/system_info" class="menu-item">
-        <i class="icon info-icon"></i>
-        <span>系統資訊檢索</span>
-      </RouterLink>
-      <RouterLink to="/qna" class="menu-item">
-        <i class="icon qna-icon"></i>
-        <span>系統問答</span>
-      </RouterLink>
+    <div class="home-content-wrapper">
+      <nav class="main-menu">
+        <RouterLink to="/employees" class="menu-item">
+          <i class="icon employee-icon"></i>
+          <span>員工管理</span>
+        </RouterLink>
+        <RouterLink to="/orders" class="menu-item">
+          <i class="icon order-icon"></i>
+          <span>訂單管理</span>
+        </RouterLink>
+        <RouterLink to="/system_info" class="menu-item">
+          <i class="icon info-icon"></i>
+          <span>系統資訊檢索</span>
+        </RouterLink>
+      </nav>
 
-    </nav>
+      <!-- QnA Chat Widget - always visible now, fixed position -->
+      <div class="qna-chat-wrapper">
+        <QnAChatWidget />
+      </div>
+    </div>
   </main>
 </template>
 
@@ -39,11 +42,13 @@ import { RouterLink } from 'vue-router'
   color: #333;
 }
 
-.welcome-heading {
-  font-size: 3em;
-  color: #2c3e50;
-  margin-bottom: 40px;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+.home-content-wrapper {
+  display: flex;
+  align-items: flex-start; /* Align items at the top of the cross axis */
+  gap: 30px; /* Space between menu and chat widget */
+  max-width: 1200px; /* Constrain width for centering */
+  margin: 0 auto; /* Center the wrapper */
+  position: relative; /* Ensure fixed positioning of QnA wrapper refers to viewport */
 }
 
 .main-menu {
@@ -98,11 +103,33 @@ import { RouterLink } from 'vue-router'
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2342b983" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-info"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>');
 }
 
-.qna-icon {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2342b983" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-help-circle"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>');
-}
 
 span {
   margin-top: 5px;
 }
+
+/* QnA Chat Widget Wrapper - Fixed Position */
+.qna-chat-wrapper {
+  position: fixed; /* Fixed to viewport */
+  bottom: 2rem;
+  right: 2rem;
+  width: 350px; /* Fixed width for the chat window */
+  height: 500px; /* Fixed height for the chat window */
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .qna-chat-wrapper {
+    bottom: 1rem;
+    right: 1rem;
+    width: calc(100% - 2rem); /* Adjust width for small screens */
+    height: 400px;
+  }
+}
+
 </style>

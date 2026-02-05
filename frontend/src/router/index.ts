@@ -24,11 +24,6 @@ const router = createRouter({
       path: '/system_info',
       name: 'system_info',
       component: () => import('../views/SystemInfoView.vue')
-    },
-    {
-      path: '/qna',
-      name: 'qna',
-      component: () => import('../views/SystemQnAView.vue')
     }
   ]
 })
