@@ -36,6 +36,8 @@ class Order(OrderBase):
 class SystemInfoBase(BaseModel):
     system_name: str
     data_query_function_name: str
+    filterable_columns: Optional[str] = None # JSON string of a list
+    frontend_route_name: Optional[str] = None # New field for frontend routing
 
 class SystemInfoCreate(SystemInfoBase):
     pass

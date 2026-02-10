@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import type { Ref } from 'vue'
+import { BASE_API_URL } from '@/api';
 
 interface Employee {
   id: number;
@@ -26,7 +27,7 @@ const newEmployee = reactive({
 
 const fetchEmployees = async () => {
   try {
-    const response = await fetch('http://localhost:8000/api/employees/');
+    const response = await fetch(`${BASE_API_URL}/api/employees/`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -54,7 +55,7 @@ const addEmployee = async () => {
   };
 
   try {
-    const response = await fetch('http://localhost:8000/api/employees/', {
+    const response = await fetch(`${BASE_API_URL}/api/employees/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,7 +89,7 @@ const deleteEmployee = async (employeeId: string) => {
   }
 
   try {
-    const response = await fetch(`http://localhost:8000/api/employees/${employeeId}`, {
+    const response = await fetch(`${BASE_API_URL}/api/employees/${employeeId}`, {
       method: 'DELETE',
     });
 
