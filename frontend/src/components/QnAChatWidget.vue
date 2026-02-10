@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'; // Import useRouter
+import { BASE_API_URL } from '@/api';
 
 const userPrompt = ref('');
 const llmResponse = ref('');
@@ -19,7 +20,7 @@ const sendMessage = async () => {
   toolResult.value = null;
 
   try {
-    const response = await fetch('http://localhost:8000/api/qna/', {
+    const response = await fetch(`${BASE_API_URL}/api/qna/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -69,7 +69,7 @@ async def startup_event():
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World from FastAPI with SQLite and LLM Integration"}
+    return {"message": "Hello, FastAPI!"}
 
 # Include routers
 app.include_router(employees.router, prefix="/api", tags=["employees"])

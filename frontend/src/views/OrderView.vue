@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import type { Ref } from 'vue'
+import { BASE_API_URL } from '@/api';
 
 interface Order {
   id: number;
@@ -18,7 +19,7 @@ const newOrder = reactive({
 
 const fetchOrders = async () => {
   try {
-    const response = await fetch('http://localhost:8000/api/orders/');
+    const response = await fetch(`${BASE_API_URL}/api/orders/`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -42,7 +43,7 @@ const addOrder = async () => {
   };
 
   try {
-    const response = await fetch('http://localhost:8000/api/orders/', {
+    const response = await fetch(`${BASE_API_URL}/api/orders/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -72,7 +73,7 @@ const deleteOrder = async (orderId: string) => {
   }
 
   try {
-    const response = await fetch(`http://localhost:8000/api/orders/${orderId}`, {
+    const response = await fetch(`${BASE_API_URL}/api/orders/${orderId}`, {
       method: 'DELETE',
     });
 

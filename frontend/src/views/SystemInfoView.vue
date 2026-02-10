@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import type { Ref } from 'vue'
+import { BASE_API_URL } from '@/api';
 
 interface SystemInfo {
   id: number;
@@ -20,7 +21,7 @@ const newSystemInfo = reactive({
 
 const fetchSystemInfo = async () => {
   try {
-    const response = await fetch('http://localhost:8000/api/system_info/');
+    const response = await fetch(`${BASE_API_URL}/api/system_info/`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -55,7 +56,7 @@ const addSystemInfo = async () => {
 
 
   try {
-    const response = await fetch('http://localhost:8000/api/system_info/', {
+    const response = await fetch(`${BASE_API_URL}/api/system_info/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +87,7 @@ const deleteSystemInfo = async (systemName: string) => {
   }
 
   try {
-    const response = await fetch(`http://localhost:8000/api/system_info/${systemName}`, {
+    const response = await fetch(`${BASE_API_URL}/api/system_info/${systemName}`, {
       method: 'DELETE',
     });
 
