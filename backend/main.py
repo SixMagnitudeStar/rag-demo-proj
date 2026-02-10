@@ -17,19 +17,23 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Configure CORS
-origins = [
-    "http://localhost:5173",  # Allow the Vue dev server
-    "http://127.0.0.1:5173",
-]
+
+# ... 在 app = FastAPI() 之後
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    # 這裡必須包含你「目前正在使用的 Vercel 網址」
+    allow_origins=[
+        "https://rag-demo-proj.vercel.app",        # 正式版網址
+        "https://rag-demo-proj-lnjk.vercel.app",   # 你提到的那個帶後綴的網址
+        "http://localhost:5173",                   # 本地開發環境
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # 允許所有方法 (GET, POST, PUT, DELETE 等)
+    allow_headers=["*"],  # 允許所有標頭
 )
+
 
 # Global map to store dynamically loaded functions and system info
 FUNCTION_MAP: Dict[str, Any] = {}
