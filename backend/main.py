@@ -131,18 +131,24 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
 
                 # The `system_info` object from SYSTEM_INFO_MAP contains filterable_columns
                 system_info = SYSTEM_INFO_MAP.get(function_name)
-                # Fallback to system_name from LLM if not found in map (shouldn't happen if LLM is good)
+                # Fallback to DB lookup if not found in map (e.g. if added after startup)
                 if not system_info:
-                    # Try to get system_info by name if function_name not directly mapped
-                    for info_obj in SYSTEM_INFO_MAP.values():
-                        if info_obj.system_name == system_name:
-                            system_info = info_obj
-                            break
+                    system_info = crud.get_system_info(db, system_name=system_name) or \
+                                 next((info for info in crud.get_all_system_info(db) if info.data_query_function_name == function_name), None)
+                    if system_info:
+                        SYSTEM_INFO_MAP[function_name] = system_info
 
 
-                if function_name and function_name in FUNCTION_MAP:
+                if function_name:
+                    tool_func = FUNCTION_MAP.get(function_name)
+                    if not tool_func and hasattr(crud, function_name):
+                        potential_func = getattr(crud, function_name)
+                        if inspect.isfunction(potential_func):
+                            tool_func = potential_func
+                            FUNCTION_MAP[function_name] = tool_func
+
+                if tool_func:
                     try:
-                        tool_func = FUNCTION_MAP[function_name]
                         # Check if tool_func expects a 'filters' argument
                         if 'filters' in inspect.signature(tool_func).parameters:
                             data = tool_func(db=db, filters=parameters)
@@ -161,9 +167,16 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                         if ItemSchema:
                             formatted_data = [ItemSchema.model_validate(item).model_dump() for item in data]
                         else:
-                            # Fallback for unknown schemas
-                            formatted_data = [{"error": f"Unknown schema for function {function_name}", "data": str(data)}]
+                            # Fallback: Just convert SQLAlchemy model to dict if no schema found
+                            print(f"DEBUG: No schema found for {function_name}, using generic dict conversion.")
+                            formatted_data = [
+                                {c.name: getattr(item, c.name) for c in item.__table__.columns} 
+                                if hasattr(item, '__table__') else str(item)
+                                for item in data
+                            ]
 
+                        print(f"DEBUG: Successfully retrieved {len(formatted_data)} records for {system_name}.")
+                        
                         # Check data size before adding to results
                         data_str = json.dumps(formatted_data, ensure_ascii=False)
                         if len(data_str) > CONTEXT_LENGTH_LIMIT:
@@ -182,12 +195,14 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                             "data": formatted_data
                         })
                     except Exception as e:
+                        print(f"DEBUG: Error executing {function_name}: {str(e)}")
                         combined_tool_results.append({
                             "system_name": system_name,
                             "function_name": function_name,
                             "error": f"執行函數 '{function_name}' 失敗: {str(e)}"
                         })
                 else:
+                    print(f"DEBUG: Function '{function_name}' not found in FUNCTION_MAP or crud.")
                     combined_tool_results.append({
                         "system_name": system_name,
                         "function_name": function_name,
@@ -195,6 +210,7 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                     })
 
         # --- Second LLM Call: Summarize data or return guidance ---
+        print(f"DEBUG: Combined results for summarization: {len(combined_tool_results)} tool calls.")
         if data_too_large:
             final_llm_response = guidance_message
         elif combined_tool_results:
@@ -202,6 +218,7 @@ async def qna_endpoint(request: Request, db: Session = Depends(get_db)):
                 user_prompt, combined_tool_results
             )
         else:
+            print("DEBUG: No tool calls were executed, using initial LLM response.")
             final_llm_response = llm_initial_text_response # If no tool_calls, use initial LLM response
 
         return {

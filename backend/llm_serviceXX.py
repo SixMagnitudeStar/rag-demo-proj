@@ -32,7 +32,7 @@ async def get_llm_response_with_tool_call(system_prompt: str, user_prompt: str) 
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash') # Using 'gemini-1.5-flash' model for tool calling
+        model = genai.GenerativeModel('gemini-1.5-flash') # Using 'gemini-1.5-flash' model for tool calling
 
         messages = [
             {"role": "user", "parts": [system_prompt + "\n\n用戶問題: " + user_prompt]},
@@ -85,7 +85,7 @@ async def get_llm_final_answer(original_prompt: str, retrieved_data_json: dict) 
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash') # Using 'gemini-1.5-flash' model for summarization
+        model = genai.GenerativeModel('gemini-1.5-flash') # Using 'gemini-1.5-flash' model for summarization
 
         summarization_prompt = (
             f"你是一個智能助理，請根據以下用戶問題和所提供的數據，用繁體中文生成一個清晰、簡潔的回答。\n"
